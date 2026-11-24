@@ -1,5 +1,8 @@
 | Device | Power mode | Model | Quant | Size (GB) | Prefill t/s | Decode t/s | Mean W | J/token* | PPL |
 |---|---|---|---|---|---|---|---|---|---|
+| mac-metal | default | llama-3.1-8b | q8_0 | 8.53 | 378.6 | 29.4 | 32.89 | 1.119 | 7.12 |
+| mac-metal | default | llama-3.1-8b | q4_k_m | 4.91 | 363.7 | 43.0 | 31.39 | 0.729 | 7.30 |
+| mac-metal | default | llama-3.1-8b | q3_k_m | 4.01 | 341.8 | 28.9 | 35.23 | 1.218 | 7.64 |
 | mac-metal | default | llama-3.2-1b | f16 | 2.47 | 2847.2 | 96.1 | 28.35 | 0.295 | 14.34 |
 | mac-metal | default | llama-3.2-1b | q8_0 | 1.31 | 2717.1 | 165.7 | 32.16 | 0.194 | 14.35 |
 | mac-metal | default | llama-3.2-1b | q4_k_m | 0.80 | 2603.3 | 224.3 | 29.98 | 0.134 | 14.89 |
