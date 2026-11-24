@@ -1,0 +1,4 @@
+{"ts": "2026-11-24T09:44:03+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "f16", "ppl": 14.3434, "ppl_err": 0.4037, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-24T09:44:14+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q8_0", "ppl": 14.3517, "ppl_err": 0.40402, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-24T09:44:24+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q4_k_m", "ppl": 14.8868, "ppl_err": 0.41862, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-24T09:44:35+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q3_k_m", "ppl": 16.9098, "ppl_err": 0.47555, "ctx": 512, "chunks": 40}
