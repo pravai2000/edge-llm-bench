@@ -1,0 +1,6 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+*.gguf
+results_nopower/
+results/results_*.jsonl

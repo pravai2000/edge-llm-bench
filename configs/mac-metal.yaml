@@ -1,0 +1,48 @@
+# Phase 1: run the whole matrix on the Mac's GPU (Metal). Same schema is used for the Jetson later.
+device:
+  name: mac-metal
+  kind: local            # local | ssh
+  power: powermetrics    # none | powermetrics | tegrastats
+  power_modes:           # one entry per mode; set_cmd is run on the device before the benchmarks
+    - name: default
+      set_cmd: null
+
+llama_cpp:
+  bin_dir: ~/llama.cpp/build/bin   # contains llama-bench, llama-perplexity
+  ngl: 99                          # layers offloaded to GPU (Metal on Mac, CUDA on Jetson)
+  threads: null                    # null = llama.cpp default
+
+models:
+  - name: llama-3.2-1b
+    quants:
+      f16:    ~/models/llama-3.2-1b/f16.gguf
+      q8_0:   ~/models/llama-3.2-1b/q8_0.gguf
+      q4_k_m: ~/models/llama-3.2-1b/q4_k_m.gguf
+      q3_k_m: ~/models/llama-3.2-1b/q3_k_m.gguf
+#  - name: llama-3.2-3b             # fits the Jetson at Q8/Q4 too
+#    quants:
+#      f16:    ~/models/llama-3.2-3b/f16.gguf
+#      q8_0:   ~/models/llama-3.2-3b/q8_0.gguf
+#      q4_k_m: ~/models/llama-3.2-3b/q4_k_m.gguf
+#      q3_k_m: ~/models/llama-3.2-3b/q3_k_m.gguf
+#  # 8B: Mac-only accuracy/speed ladder (Q4 is the only level that also fits the 8 GB Jetson).
+#  # F16 (~16 GB) is too tight for the GPU working set on 24 GB, so Q8_0 is the reference here.
+#  - name: llama-3.1-8b
+#    quants:
+#      q8_0:   ~/models/llama-3.1-8b/q8_0.gguf
+#     q4_k_m: ~/models/llama-3.1-8b/q4_k_m.gguf
+#     q3_k_m: ~/models/llama-3.1-8b/q3_k_m.gguf
+
+bench:
+  n_prompt: 512
+  n_gen: 256
+  repetitions: 10
+  cooldown_s: 30         # pause between runs to limit thermal carry-over
+
+accuracy:
+  enabled: true
+  text_file: ~/llama.cpp/wikitext-2-raw/wiki.test.raw
+  ctx: 512
+  chunks: 40             # limit chunks to keep runs short; remove for full test set
+
+results_dir: results

@@ -1,0 +1,43 @@
+# Phase 2: same matrix on the Jetson Orin Nano, driven from the Mac over SSH.
+# Paths below are paths ON THE JETSON. Verify power-mode ids with `sudo nvpmodel -q --verbose`
+# on your JetPack version before running; they differ between releases.
+device:
+  name: jetson-orin-nano-8gb
+  kind: ssh
+  host: jetson.local
+  user: jetson           # change to your login
+  power: tegrastats
+  power_modes:
+    - name: mode0
+      set_cmd: "sudo nvpmodel -m 0 && sudo jetson_clocks"
+    - name: mode1
+      set_cmd: "sudo nvpmodel -m 1"
+    - name: mode2
+      set_cmd: "sudo nvpmodel -m 2"
+
+llama_cpp:
+  bin_dir: ~/llama.cpp/build/bin
+  ngl: 99
+  threads: null
+
+models:
+  - name: llama-3.2-1b
+    quants:
+      f16:    ~/models/llama-3.2-1b/f16.gguf
+      q8_0:   ~/models/llama-3.2-1b/q8_0.gguf
+      q4_k_m: ~/models/llama-3.2-1b/q4_k_m.gguf
+      q3_k_m: ~/models/llama-3.2-1b/q3_k_m.gguf
+
+bench:
+  n_prompt: 512
+  n_gen: 128
+  repetitions: 3
+  cooldown_s: 30
+
+accuracy:
+  enabled: false         # perplexity is hardware-independent for identical GGUFs: run it on the Mac
+  text_file: ~/llama.cpp/wikitext-2-raw/wiki.test.raw
+  ctx: 512
+  chunks: 40
+
+results_dir: results
