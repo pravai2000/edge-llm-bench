@@ -2,3 +2,7 @@
 {"ts": "2026-11-24T09:44:14+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q8_0", "ppl": 14.3517, "ppl_err": 0.40402, "ctx": 512, "chunks": 40}
 {"ts": "2026-11-24T09:44:24+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q4_k_m", "ppl": 14.8868, "ppl_err": 0.41862, "ctx": 512, "chunks": 40}
 {"ts": "2026-11-24T09:44:35+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q3_k_m", "ppl": 16.9098, "ppl_err": 0.47555, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-24T12:33:56+00:00", "device": "mac-metal", "model": "llama-3.2-3b", "quant": "f16", "ppl": 10.5709, "ppl_err": 0.28354, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-24T12:34:22+00:00", "device": "mac-metal", "model": "llama-3.2-3b", "quant": "q8_0", "ppl": 10.5814, "ppl_err": 0.28396, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-24T12:34:49+00:00", "device": "mac-metal", "model": "llama-3.2-3b", "quant": "q4_k_m", "ppl": 10.8721, "ppl_err": 0.29126, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-24T12:35:16+00:00", "device": "mac-metal", "model": "llama-3.2-3b", "quant": "q3_k_m", "ppl": 11.8057, "ppl_err": 0.31861, "ctx": 512, "chunks": 40}
