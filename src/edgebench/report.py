@@ -10,7 +10,10 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from .run import read_jsonl  # noqa: E402
 
-QUANT_ORDER = ["f16", "q8_0", "q6_k", "q5_k_m", "q4_k_m", "q4_0", "q3_k_m", "q2_k"]
+# Labels ending in _imat were quantized with an importance matrix. Order is roughly by bits per weight.
+QUANT_ORDER = ["f16", "q8_0", "mlx_8bit", "q6_k", "q5_k_m", "q4_k_m", "q4_k_m_imat", "mlx_4bit",
+               "iq4_xs_imat", "q4_0",
+               "q3_k_m", "q3_k_m_imat", "iq3_m_imat", "q2_k", "q2_k_imat"]
 
 
 def quant_rank(q: str) -> int:
@@ -30,7 +33,7 @@ def aggregate_runs(results: list) -> list:
     out = []
     for rs in groups.values():
         agg = dict(rs[0])
-        for f in ("pp_tps", "tg_tps", "power_mean_w", "joules_per_token_approx"):
+        for f in ("pp_tps", "tg_tps", "power_mean_w", "power_cpu_w", "power_gpu_w", "joules_per_token_approx"):
             v = _vals(rs, f)
             agg[f] = round(statistics.fmean(v), 4) if v else None
         mx = _vals(rs, "power_max_w")
@@ -51,7 +54,7 @@ def build_rows(results: list, accuracy: list) -> list:
         size, tg = r.get("model_size_bytes"), r.get("tg_tps")
         eff = round(tg * size / 1e9, 1) if size and tg else None   # decode t/s x model GB = GB/s read
         rows.append({**r, "ppl": a.get("ppl"), "ppl_err": a.get("ppl_err"), "eff_gbps": eff})
-    rows.sort(key=lambda r: (r["device"], r["power_mode"], r["model"], quant_rank(r["quant"])))
+    rows.sort(key=lambda r: (r["device"], r["power_mode"], r["model"], quant_rank(r["quant"]), r["quant"]))
     return rows
 
 
@@ -61,7 +64,7 @@ def _fmt(v, nd=2):
 
 def markdown_table(rows: list) -> str:
     head = ("| Device | Power mode | Model | Quant | Size (GB) | Prefill t/s | Decode t/s | Run σ (n)*** | "
-            "Eff. GB/s** | Mean W | J/token* | PPL |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+            "Eff. GB/s** | Mean W | CPU W | GPU W | J/token* | PPL |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
     body = ""
     for r in rows:
         size = r.get("model_size_bytes")
@@ -69,6 +72,7 @@ def markdown_table(rows: list) -> str:
                  f"{_fmt(size / 1e9 if size else None)} | {_fmt(r.get('pp_tps'), 1)} | "
                  f"{_fmt(r.get('tg_tps'), 1)} | {_fmt(r.get('tg_tps_runstd'), 1)} ({r.get('n_runs', 1)}) | "
                  f"{_fmt(r.get('eff_gbps'), 0)} | {_fmt(r.get('power_mean_w'))} | "
+                 f"{_fmt(r.get('power_cpu_w'), 1)} | {_fmt(r.get('power_gpu_w'), 1)} | "
                  f"{_fmt(r.get('joules_per_token_approx'), 3)} | {_fmt(r.get('ppl'))} |\n")
     return (head + body + "\n*J/token = mean power over the bench window / decode tokens-per-second (approximate).\n"
             "**Eff. GB/s = decode tokens/s x model size: the weight bytes streamed per second.\n"
@@ -83,7 +87,7 @@ def _series(rows):
 
 
 def _quant_positions(rows: list) -> dict:
-    quants = sorted({r["quant"] for r in rows}, key=quant_rank)
+    quants = sorted({r["quant"] for r in rows}, key=lambda q: (quant_rank(q), q))
     return {q: i for i, q in enumerate(quants)}
 
 
@@ -133,8 +137,11 @@ def plot_tradeoff(rows: list, path: str) -> bool:
     return True
 
 
-def make_report(results_dir: str, out_dir: str, peak_gbs: float = None) -> list:
-    rows = build_rows(read_jsonl(os.path.join(results_dir, "results.jsonl")),
+def make_report(results_dir: str, out_dir: str, peak_gbs: float = None, run_ids=None) -> list:
+    results = read_jsonl(os.path.join(results_dir, "results.jsonl"))
+    if run_ids:   # restrict to chosen runs, e.g. one interleaved session, so sessions are not mixed
+        results = [r for r in results if r.get("run_id", "r1") in set(run_ids)]
+    rows = build_rows(results,
                       read_jsonl(os.path.join(results_dir, "accuracy.jsonl")))
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "results.md"), "w") as f:
@@ -154,8 +161,10 @@ def main(argv=None):
     ap.add_argument("--out", default="report")
     ap.add_argument("--peak-gbs", type=float, default=None,
                     help="theoretical memory bandwidth of the device, drawn as a line on bandwidth.png")
+    ap.add_argument("--run-ids", nargs="+", default=None,
+                    help="only use these run ids (e.g. s2a s2b); default is every run in results.jsonl")
     args = ap.parse_args(argv)
-    rows = make_report(args.results, args.out, args.peak_gbs)
+    rows = make_report(args.results, args.out, args.peak_gbs, args.run_ids)
     print(f"{len(rows)} rows -> {args.out}/")
 
 

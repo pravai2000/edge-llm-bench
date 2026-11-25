@@ -3,6 +3,7 @@ import os
 import re
 import statistics
 import threading
+import time
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -11,6 +12,9 @@ from typing import List, Optional
 _TEGRA_PATTERNS = [re.compile(r"VDD_IN\s+(\d+)mW"), re.compile(r"POM_5V_IN\s+(\d+)/")]
 # Apple Silicon powermetrics: "Combined Power (CPU + GPU + ANE): 1234 mW"
 _MAC_RE = re.compile(r"Combined Power \(CPU \+ GPU \+ ANE\):\s*(\d+)\s*mW")
+_MAC_CPU_RE = re.compile(r"^CPU Power:\s*(\d+)\s*mW", re.M)
+# powermetrics prints "GPU Power" more than once per sample (two sections); the values are close, so average them.
+_MAC_GPU_RE = re.compile(r"^GPU Power:\s*(\d+)\s*mW", re.M)
 
 
 def parse_tegrastats(text: str) -> List[float]:
@@ -28,12 +32,22 @@ def parse_powermetrics(text: str) -> List[float]:
     return [int(m.group(1)) / 1000.0 for m in _MAC_RE.finditer(text)]
 
 
+def parse_powermetrics_split(text: str):
+    """Return (cpu_watts, gpu_watts) lists, one value per sample (GPU lines averaged within a sample)."""
+    cpu = [int(x) / 1000.0 for x in _MAC_CPU_RE.findall(text)]
+    gpu = [int(x) / 1000.0 for x in _MAC_GPU_RE.findall(text)]
+    return cpu, gpu
+
+
 @dataclass
 class PowerStats:
     mean_w: Optional[float]
     max_w: Optional[float]
     samples: int
     error: Optional[str] = None
+    mean_cpu_w: Optional[float] = None
+    mean_gpu_w: Optional[float] = None
+    window: str = "full"      # "timed" when samples were restricted to the benchmark's timed section
 
 
 def summarize(watts: List[float]) -> PowerStats:
@@ -56,7 +70,7 @@ class PowerLogger:
         self.proc = None
         self._thread = None
         self._stop_evt = threading.Event()
-        self._chunks: List[str] = []
+        self._chunks: List[tuple] = []   # (unix time the sample finished, raw text)
         self._error: Optional[str] = None
 
     def _command(self):
@@ -81,7 +95,7 @@ class PowerLogger:
             if r.returncode != 0:
                 self._error = ((r.stderr or r.stdout or "").strip() or f"exit {r.returncode}")[:300]
                 return
-            self._chunks.append(r.stdout)
+            self._chunks.append((time.time(), r.stdout))
 
     def start(self):
         if self.source == "none":
@@ -92,14 +106,29 @@ class PowerLogger:
         else:
             self.proc = self.device.popen(self._command())
 
-    def stop(self) -> PowerStats:
+    def stop(self, window=None) -> PowerStats:
+        """window=(t_start, t_end) as unix times restricts powermetrics samples to that interval (used for
+        runtimes that report their own timed section, so startup and model load do not dilute the mean)."""
         if self.source == "none":
             return PowerStats(None, None, 0)
         if self.source == "powermetrics":
             self._stop_evt.set()
             if self._thread:
                 self._thread.join(timeout=35)
-            stats = summarize(parse_powermetrics("\n".join(self._chunks)))
+            chunks, used = self._chunks, "full"
+            if window:
+                lo, hi = window[0], window[1] + self.interval_ms / 1000.0 + 0.2
+                inside = [c for c in self._chunks if lo <= c[0] <= hi]
+                if inside:
+                    chunks, used = inside, "timed"
+            text = "\n".join(t for _, t in chunks)
+            stats = summarize(parse_powermetrics(text))
+            stats.window = used
+            cpu, gpu = parse_powermetrics_split(text)
+            if cpu:
+                stats.mean_cpu_w = round(statistics.fmean(cpu), 3)
+            if gpu:
+                stats.mean_gpu_w = round(statistics.fmean(gpu), 3)
         else:
             if self.proc is None:
                 return PowerStats(None, None, 0)

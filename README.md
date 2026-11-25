@@ -59,3 +59,12 @@ Importance matrix versus plain (Llama-3.2-1B)
 Quant	Plain PPL	With imatrix	Change	Share of the gap to FP16 closed
 q4_k_m	14.89	14.80	−0.09 (−0.6%)	16%
 q3_k_m	16.91	16.06	−0.85 (−5.0%)	33%
+
+
+Day 12 inference
+
+On an M4 Pro the decode is memory-bandwidth-bound: effective bandwidth tops out near 200–205 GB/s, about 75% of the 273 GB/s peak (assuming that peak).
+8-bit is effectively lossless in both runtimes, and the two run at similar speed.
+Q4_K_M is the best llama.cpp point: 1.4–1.6× faster than Q8_0 for +3–4% PPL. Q3_K_M is slower than Q4_K_M and less accurate.
+MLX 4-bit is faster than Q4_K_M (+12–25%) and uses less energy per token, but it costs +9–20% PPL against +3–4%.
+llama.cpp's default threading burns about 10 W of extra CPU power with no speed gain on a GPU-offloaded model; one thread removes it.

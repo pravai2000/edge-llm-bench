@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 import yaml
 
-from . import llamacpp
+from . import llamacpp, mlx_bench, mlx_ppl
 from .devices import Device
 from .power import PowerLogger
 
@@ -50,6 +50,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _timed_window(stdout: str):
+    """(t_start, t_end) from a benchmark's JSON, or None when it does not report one."""
+    try:
+        entries = json.loads(stdout)
+        starts = [e["t_start"] for e in entries if "t_start" in e]
+        ends = [e["t_end"] for e in entries if "t_end" in e]
+        return (min(starts), max(ends)) if starts and ends else None
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
 def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print, run_id: str = "r1") -> None:
     device = device or make_device(cfg)
     # Expand ~ for local devices (subprocess does not use a shell); ssh keeps ~ for the remote shell.
@@ -75,23 +86,31 @@ def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print, ru
                     log(f"skip {key}")
                     continue
                 mpath = device.expand(path)
-                log(f"bench {key}")
+                runtime = model.get("runtime", "llamacpp")      # llamacpp | mlx
+                log(f"bench {key} [{runtime}]")
                 logger = PowerLogger(device, cfg["device"]["power"])
                 logger.start()
+                proc = None
                 try:
-                    proc = device.run(llamacpp.bench_cmd(cfg, mpath), timeout=3600)
+                    bench = mlx_bench.bench_cmd(cfg, mpath) if runtime == "mlx" else llamacpp.bench_cmd(cfg, mpath)
+                    proc = device.run(bench, timeout=3600)
                 finally:
-                    stats = logger.stop()
+                    # A runtime that reports its own timed section (MLX) lets us drop startup/load samples.
+                    # Only valid when the benchmark ran on this machine (same clock as the sampler).
+                    window = _timed_window(proc.stdout) if (proc is not None and device.kind == "local") else None
+                    stats = logger.stop(window)
                 parsed = llamacpp.parse_bench_json(proc.stdout)
                 tg = parsed["tg_tps"]
                 rec = {
                     "ts": _now(), "device": device.name, "model": model["name"], "quant": quant,
-                    "power_mode": pm["name"], "run_id": run_id, "n_prompt": b["n_prompt"], "n_gen": b["n_gen"],
+                    "power_mode": pm["name"], "run_id": run_id, "runtime": runtime, "n_prompt": b["n_prompt"], "n_gen": b["n_gen"],
                     "repetitions": b["repetitions"], **parsed,
                     "power_mean_w": stats.mean_w, "power_max_w": stats.max_w,
                     "power_samples": stats.samples, "power_error": stats.error,
-                    # Approximation: mean power over the whole bench window / decode tokens-per-second.
-                    # The window includes model load and prompt processing, so treat as an upper bound.
+                    "power_cpu_w": stats.mean_cpu_w, "power_gpu_w": stats.mean_gpu_w,
+                    "power_window": stats.window, "threads": cfg["llama_cpp"].get("threads"),
+                    # Approximation: mean power over the sampling window / decode tokens-per-second. The window
+                    # includes prompt processing, and for llama.cpp also model load (power_window == "full").
                     "joules_per_token_approx": round(stats.mean_w / tg, 4) if stats.mean_w and tg else None,
                 }
                 if stats.error:
@@ -108,9 +127,14 @@ def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print, ru
                     log(f"skip ppl {key}")
                     continue
                 log(f"perplexity {key}")
-                proc = device.run(llamacpp.perplexity_cmd(cfg, device.expand(path)), timeout=7200)
-                # llama.cpp logs to stderr; search both streams.
-                ppl, err = llamacpp.parse_perplexity(proc.stdout + "\n" + proc.stderr)
+                if model.get("runtime", "llamacpp") == "mlx":
+                    # Same text file and windows as llama-perplexity, scored with MLX (see mlx_ppl.py).
+                    proc = device.run(mlx_ppl.ppl_cmd(cfg, device.expand(path)), timeout=7200)
+                    ppl, err = mlx_ppl.parse_output(proc.stdout)
+                else:
+                    proc = device.run(llamacpp.perplexity_cmd(cfg, device.expand(path)), timeout=7200)
+                    # llama.cpp logs to stderr; search both streams.
+                    ppl, err = llamacpp.parse_perplexity(proc.stdout + "\n" + proc.stderr)
                 append_jsonl(acc_path, {"ts": _now(), "device": device.name, "model": model["name"],
                                         "quant": quant, "ppl": ppl, "ppl_err": err,
                                         "ctx": acc["ctx"], "chunks": acc.get("chunks")})
