@@ -47,3 +47,5 @@ Report output: `report/results.md`, `decode_tps.png`, `perplexity.png`, `energy.
 2. Add 1.5B and 3B models; add a second runtime (e.g. MLX on Mac) for comparison.
 3. Jetson Orin Nano: flash, build llama.cpp with CUDA, run `configs/jetson-orin-nano.yaml`, sweep power modes.
 4. CI workflow, polished charts, blog post.
+
+Decode is memory-bandwidth-bound. FP16 and Q8_0 reach 87–92% of the theoretical ceiling (peak bandwidth ÷ model size). Efficiency falls as bits drop (Q4_K_M ≈ 77%, Q3_K_M ≈ 42% at 8B) because dequantization cost grows. Q3_K_M streams at a flat ≈115 GB/s equivalent across 1B, 3B and 8B, so its kernel, not memory, is the limit. Larger models are more efficient because fixed per-token overheads shrink."

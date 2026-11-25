@@ -50,7 +50,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print) -> None:
+def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print, run_id: str = "r1") -> None:
     device = device or make_device(cfg)
     # Expand ~ for local devices (subprocess does not use a shell); ssh keeps ~ for the remote shell.
     cfg = {**cfg, "llama_cpp": {**cfg["llama_cpp"], "bin_dir": device.expand(cfg["llama_cpp"]["bin_dir"])},
@@ -58,7 +58,9 @@ def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print) ->
                                               if cfg["accuracy"].get("text_file") else {})}}
     rdir = cfg["results_dir"]
     res_path, acc_path = os.path.join(rdir, "results.jsonl"), os.path.join(rdir, "accuracy.jsonl")
-    done = {(r["device"], r["model"], r["quant"], r["power_mode"]) for r in read_jsonl(res_path)}
+    # Records written before run ids existed count as run "r1".
+    done = {(r["device"], r["model"], r["quant"], r["power_mode"], r.get("run_id", "r1"))
+            for r in read_jsonl(res_path)}
     done_acc = {(r["device"], r["model"], r["quant"]) for r in read_jsonl(acc_path)}
     b = cfg["bench"]
 
@@ -68,7 +70,7 @@ def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print) ->
             device.run_shell(pm["set_cmd"])
         for model in cfg["models"]:
             for quant, path in model["quants"].items():
-                key = (device.name, model["name"], quant, pm["name"])
+                key = (device.name, model["name"], quant, pm["name"], run_id)
                 if key in done:
                     log(f"skip {key}")
                     continue
@@ -84,7 +86,7 @@ def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print) ->
                 tg = parsed["tg_tps"]
                 rec = {
                     "ts": _now(), "device": device.name, "model": model["name"], "quant": quant,
-                    "power_mode": pm["name"], "n_prompt": b["n_prompt"], "n_gen": b["n_gen"],
+                    "power_mode": pm["name"], "run_id": run_id, "n_prompt": b["n_prompt"], "n_gen": b["n_gen"],
                     "repetitions": b["repetitions"], **parsed,
                     "power_mean_w": stats.mean_w, "power_max_w": stats.max_w,
                     "power_samples": stats.samples, "power_error": stats.error,
@@ -117,8 +119,10 @@ def run_matrix(cfg: dict, device: Device = None, sleep=time.sleep, log=print) ->
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Run the edge LLM quantization benchmark matrix")
     ap.add_argument("--config", required=True)
+    ap.add_argument("--run-id", default="r1",
+                    help="label for this repetition (r1, r2, ...); each run id is stored and averaged in the report")
     args = ap.parse_args(argv)
-    run_matrix(load_config(args.config))
+    run_matrix(load_config(args.config), run_id=args.run_id)
 
 
 if __name__ == "__main__":
