@@ -98,11 +98,13 @@ def plot_metric(rows: list, metric: str, ylabel: str, path: str, hline=None) -> 
     for label, rs in _series(rows).items():
         rs = sorted([r for r in rs if r.get(metric) is not None], key=lambda r: quant_rank(r["quant"]))
         if rs:
-            ax.plot([pos[r["quant"]] for r in rs], [r[metric] for r in rs], marker="o", label=label)
+            # Markers only: the x axis is a list of different quant types, so a line between them would imply a trend.
+            ax.plot([pos[r["quant"]] for r in rs], [r[metric] for r in rs], marker="o", linestyle="none",
+                    label=label)
             drew = True
     if drew:
         ax.set_xticks(list(pos.values()))
-        ax.set_xticklabels(list(pos.keys()))
+        ax.set_xticklabels(list(pos.keys()), rotation=35, ha="right")
         if hline:
             ax.axhline(hline, linestyle="--", color="gray", linewidth=1)
             ax.annotate(f"peak ~{hline:g} GB/s (approx)", (0, hline), fontsize=7, xytext=(2, 3),
@@ -110,28 +112,68 @@ def plot_metric(rows: list, metric: str, ylabel: str, path: str, hline=None) -> 
         ax.set_xlabel("quantization")
         ax.set_ylabel(ylabel)
         ax.grid(alpha=0.3)
-        ax.legend(fontsize=7)
+        ax.legend(fontsize=7, loc="best")
         fig.tight_layout()
         fig.savefig(path, dpi=150)
     plt.close(fig)
     return drew
 
 
+# Candidate label offsets in points (dx, dy) and alignment, tried in order for each point.
+_OFFSETS = [(5, 5, "left", "bottom"), (5, -6, "left", "top"), (-5, 5, "right", "bottom"),
+            (-5, -6, "right", "top"), (6, 15, "left", "bottom"), (6, -17, "left", "top"),
+            (-6, 15, "right", "bottom"), (-6, -17, "right", "top"), (6, 26, "left", "bottom"),
+            (6, -28, "left", "top")]
+
+
+def _place_point_labels(fig, ax, pts: list) -> None:
+    """Label each point with its quant in its series colour. Candidate offsets are tried nearest-first and the first
+    that overlaps no placed label and no dot wins, so a label stays next to its own point. Offsets farther than
+    ~12 pt get a thin leader line so the label is still visibly attached. Falls back to the first offset."""
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    dots = [tuple(ax.transData.transform((r["ppl"], r["tg_tps"]))) for r in pts]
+    placed = []
+    for r in pts:
+        chosen = None
+        first = None
+        for dx, dy, ha, va in _OFFSETS:
+            t = ax.annotate(r["quant"], (r["ppl"], r["tg_tps"]), fontsize=7, xytext=(dx, dy),
+                            textcoords="offset points", ha=ha, va=va)
+            box = t.get_window_extent(renderer).expanded(1.05, 1.1)
+            t.remove()
+            if first is None:
+                first = ((dx, dy, ha, va), box)
+            if any(box.overlaps(b) for b in placed) or any(box.x0 <= x <= box.x1 and box.y0 <= y <= box.y1
+                                                          for x, y in dots):
+                continue
+            chosen = ((dx, dy, ha, va), box)
+            break
+        (dx, dy, ha, va), box = chosen or first
+        far = max(abs(dx), abs(dy)) > 12
+        ax.annotate(r["quant"], (r["ppl"], r["tg_tps"]), fontsize=7, xytext=(dx, dy),
+                    textcoords="offset points", ha=ha, va=va, color=r["_c"],
+                    arrowprops=dict(arrowstyle="-", color=r["_c"], lw=0.6, shrinkA=0, shrinkB=2) if far else None)
+        placed.append(box)
+
+
 def plot_tradeoff(rows: list, path: str) -> bool:
     pts = [r for r in rows if r.get("ppl") is not None and r.get("tg_tps") is not None]
     if not pts:
         return False
-    fig, ax = plt.subplots(figsize=(6, 4.5))
-    for label, rs in _series(pts).items():
-        ax.scatter([r["ppl"] for r in rs], [r["tg_tps"] for r in rs], label=label)
-        for r in rs:
-            ax.annotate(r["quant"], (r["ppl"], r["tg_tps"]), fontsize=7, xytext=(3, 3),
-                        textcoords="offset points")
+    fig, ax = plt.subplots(figsize=(7.5, 5.5))
+    pts = []
+    for label, rs in _series([r for r in rows if r.get("ppl") is not None and r.get("tg_tps") is not None]).items():
+        sc = ax.scatter([r["ppl"] for r in rs], [r["tg_tps"] for r in rs], label=label)
+        colour = sc.get_facecolor()[0]
+        pts += [{**r, "_c": colour} for r in rs]          # copies: the caller's rows are left untouched
     ax.set_xlabel("perplexity (lower is better)")
     ax.set_ylabel("decode tokens/s (higher is better)")
     ax.grid(alpha=0.3)
-    ax.legend(fontsize=7)
+    ax.margins(x=0.08, y=0.08)
+    ax.legend(fontsize=7, loc="best")
     fig.tight_layout()
+    _place_point_labels(fig, ax, pts)
     fig.savefig(path, dpi=150)
     plt.close(fig)
     return True

@@ -12,3 +12,7 @@
 {"ts": "2026-11-25T02:29:58+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q4_k_m_imat", "ppl": 14.8021, "ppl_err": 0.41816, "ctx": 512, "chunks": 40}
 {"ts": "2026-11-25T02:30:08+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "q3_k_m_imat", "ppl": 16.0605, "ppl_err": 0.45901, "ctx": 512, "chunks": 40}
 {"ts": "2026-11-25T02:30:19+00:00", "device": "mac-metal", "model": "llama-3.2-1b", "quant": "iq4_xs_imat", "ppl": 14.9889, "ppl_err": 0.42612, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-25T08:26:32+00:00", "device": "mac-metal", "model": "llama-3.2-1b-mlx", "quant": "mlx_8bit", "ppl": 14.359910144643502, "ppl_err": 0.40416351185435817, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-25T08:26:44+00:00", "device": "mac-metal", "model": "llama-3.2-1b-mlx", "quant": "mlx_4bit", "ppl": 17.27028508194829, "ppl_err": 0.48936286202739415, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-25T08:27:12+00:00", "device": "mac-metal", "model": "llama-3.2-3b-mlx", "quant": "mlx_8bit", "ppl": 10.615163305770471, "ppl_err": 0.2852440140087091, "ctx": 512, "chunks": 40}
+{"ts": "2026-11-25T08:27:40+00:00", "device": "mac-metal", "model": "llama-3.2-3b-mlx", "quant": "mlx_4bit", "ppl": 11.478345233060814, "ppl_err": 0.312080463355379, "ctx": 512, "chunks": 40}
